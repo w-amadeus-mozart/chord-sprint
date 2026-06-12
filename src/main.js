@@ -9,6 +9,7 @@ import { GameAudio } from './audio.js';
 import { UI, showScreen } from './ui.js';
 import { buildPiano, KEY_MAP } from './piano.js';
 import { SprintMode } from './modes/sprint.js';
+import { SurvivalMode } from './modes/survival.js';
 
 // ── MIDI status bar ──────────────────────────────────────
 function updateMidiStatus() {
@@ -37,7 +38,13 @@ function flashMidiActivity() {
 MidiInput.on((type) => {
   if (type === 'notesChanged') {
     flashMidiActivity();
-    if (state.screen === 'game') SprintMode.onNotesChanged();
+    if (state.screen === 'game') {
+      if (state.mode === 'survival') {
+        SurvivalMode.onNotesChanged();
+      } else {
+        SprintMode.onNotesChanged();
+      }
+    }
   }
   if (type === 'deviceChange') updateMidiStatus();
 });
@@ -82,7 +89,7 @@ document.addEventListener('keyup', e => {
   }
 });
 
-// ── Page visibility — pause timer and response clock ─────
+// ── Page visibility — pause timer and response/window clock ─────
 document.addEventListener('visibilitychange', () => {
   if (state.screen !== 'game') return;
   if (document.hidden) {
@@ -92,19 +99,57 @@ document.addEventListener('visibilitychange', () => {
       const delta = Date.now() - state.pausedAt;
       state.timerStart += delta;
       state.attemptStart += delta; // don't penalise response time for hidden time
+      if (state.mode === 'survival') {
+        // Shift windowDeadline forward by the same hidden duration
+        state.survival.windowDeadline += delta;
+      }
       state.pausedAt = 0;
     }
   }
 });
 
-// ── Button wiring ────────────────────────────────────────
-document.getElementById('btn-start').addEventListener('click', () => {
-  SprintMode.start(state.difficulty);
+// ── Mode selector — wired once on init ───────────────────
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.mode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(b =>
+      b.classList.toggle('selected', b === btn));
+    document.getElementById('variant-selector').style.display =
+      state.mode === 'survival' ? 'flex' : 'none';
+    UI.renderHSPanel();
+  });
 });
 
-document.getElementById('btn-play-again').addEventListener('click', () => {
-  SprintMode.start(state.difficulty);
+// ── Variant toggle — wired once on init ──────────────────
+document.querySelectorAll('.variant-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.selectedVariant = btn.dataset.variant;
+    document.querySelectorAll('.variant-btn').forEach(b =>
+      b.classList.toggle('selected', b === btn));
+    UI.renderHSPanel();
+  });
 });
+
+// ── Button wiring ────────────────────────────────────────
+function startGame() {
+  if (state.mode === 'survival') {
+    SurvivalMode.start(state.difficulty, state.selectedVariant);
+  } else {
+    SprintMode.start(state.difficulty);
+  }
+}
+
+function replayGame() {
+  if (state.mode === 'survival') {
+    // Replay with the same variant as the just-finished run
+    SurvivalMode.start(state.difficulty, state.survival.variant);
+  } else {
+    SprintMode.start(state.difficulty);
+  }
+}
+
+document.getElementById('btn-start').addEventListener('click', startGame);
+document.getElementById('btn-play-again').addEventListener('click', replayGame);
 
 document.getElementById('btn-change-level').addEventListener('click', () => {
   state.screen = 'menu';

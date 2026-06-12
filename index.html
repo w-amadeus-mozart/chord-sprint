@@ -22,6 +22,24 @@
   <div class="logo">Chord<span>Sprint</span></div>
   <p class="tagline">Play the chord. Beat the clock. Train your ears.</p>
 
+  <!-- Mode selector — appears above the difficulty grid -->
+  <div class="mode-selector" id="mode-selector">
+    <button class="mode-btn selected" data-mode="sprint">
+      <div class="mode-btn-title">Sprint</div>
+      <div class="mode-btn-desc">How many in 60s?</div>
+    </button>
+    <button class="mode-btn" data-mode="survival">
+      <div class="mode-btn-title">Survival</div>
+      <div class="mode-btn-desc">How long can you last?</div>
+    </button>
+  </div>
+
+  <!-- Variant toggle — only shown when Survival is selected -->
+  <div class="variant-selector" id="variant-selector" style="display:none">
+    <button class="variant-btn selected" data-variant="std">Standard</button>
+    <button class="variant-btn" data-variant="nm">Nightmare</button>
+  </div>
+
   <div class="difficulty-grid" id="difficulty-grid"></div>
 
   <div class="hs-panel">
@@ -36,11 +54,11 @@
 <div id="game" class="screen">
   <div class="hud">
     <div class="hud-item">
-      <div class="hud-label">Score</div>
+      <div class="hud-label" id="hud-label-score">Score</div>
       <div class="hud-val score-val" id="hud-score">0</div>
     </div>
     <div class="hud-item">
-      <div class="hud-label">Time</div>
+      <div class="hud-label" id="hud-label-timer">Time</div>
       <div class="hud-val timer-val" id="hud-timer">60</div>
     </div>
     <div class="hud-item">
@@ -52,9 +70,11 @@
       <div class="hud-val mult-val" id="hud-mult">×1</div>
     </div>
     <div class="hud-item">
-      <div class="hud-label">Chords</div>
+      <div class="hud-label" id="hud-label-chords">Chords</div>
       <div class="hud-val" id="hud-chords">0</div>
     </div>
+    <!-- Shown only in Survival Nightmare runs -->
+    <div class="nightmare-badge" id="nightmare-badge" style="display:none">☠ NIGHTMARE</div>
   </div>
 
   <div class="timer-bar-wrap">
@@ -76,9 +96,12 @@
 <!-- ══════════ RESULTS SCREEN ══════════ -->
 <div id="results" class="screen">
   <div class="results-header">
-    <h1>Round Over</h1>
+    <h1 id="results-headline">Round Over</h1>
     <div id="new-hs-badge" style="display:none" class="new-hs-badge">🏆 New High Score!</div>
   </div>
+
+  <!-- Survival-only: variant/difficulty tag + death reason -->
+  <div id="results-subheader" style="display:none"></div>
 
   <div class="stats-grid" id="stats-grid"></div>
   <div class="weak-spot" id="weak-spot" style="display:none"></div>

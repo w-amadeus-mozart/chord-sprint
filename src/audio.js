@@ -30,10 +30,30 @@ function playSuccessChime(pitchClasses) {
   });
 }
 
+function playDeathSound() {
+  if (muted) return;
+  const c = getCtx();
+  const now = c.currentTime;
+  // Short descending tone — A3, F3, D3
+  [220, 174.6, 146.8].forEach((freq, i) => {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const t = now + i * 0.12;
+    gain.gain.setValueAtTime(0.15, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    osc.start(t);
+    osc.stop(t + 0.3);
+  });
+}
+
 function toggleMute() { muted = !muted; return muted; }
 
 export const GameAudio = {
   playSuccessChime,
+  playDeathSound,
   toggleMute,
   isMuted: () => muted,
 };

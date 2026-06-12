@@ -17,11 +17,27 @@ export const UI = {
   },
 
   renderHUD() {
+    // Reset labels to Sprint defaults (in case we came from Survival)
+    document.getElementById('hud-label-score').textContent = 'Score';
+    document.getElementById('hud-label-timer').textContent = 'Time';
+    document.getElementById('hud-label-chords').textContent = 'Chords';
+    document.getElementById('nightmare-badge').style.display = 'none';
+
     document.getElementById('hud-score').textContent = state.score.toLocaleString();
     document.getElementById('hud-streak').textContent = state.streak;
     document.getElementById('hud-mult').textContent =
       '×' + (state.multiplier % 1 === 0 ? state.multiplier : state.multiplier.toFixed(1));
     document.getElementById('hud-chords').textContent = state.chordsCompleted;
+    UI.renderStreakFire();
+  },
+
+  renderSurvivalHUD() {
+    const sv = state.survival;
+    document.getElementById('hud-score').textContent = sv.chordsSurvived;
+    document.getElementById('hud-streak').textContent = state.streak;
+    document.getElementById('hud-mult').textContent =
+      '×' + (state.multiplier % 1 === 0 ? state.multiplier : state.multiplier.toFixed(1));
+    document.getElementById('hud-chords').textContent = state.score.toLocaleString();
     UI.renderStreakFire();
   },
 
@@ -35,6 +51,36 @@ export const UI = {
     const cls = t > 20 ? 'green' : t > 8 ? 'amber' : 'red';
     bar.className = 'timer-bar ' + (cls !== 'green' ? cls : '');
     el.className = 'hud-val timer-val' + (cls !== 'green' ? ' ' + cls : '');
+  },
+
+  renderSurvivalTimer() {
+    const sv = state.survival;
+    const bar = document.getElementById('timer-bar');
+    const timerEl = document.getElementById('hud-timer');
+    const arena = document.getElementById('chord-arena');
+
+    let pct, cls, displayText;
+
+    if (state.waitingForRelease) {
+      // Window hasn't started; show full bar and upcoming window duration
+      pct = 100;
+      cls = 'green';
+      displayText = sv.windowSec.toFixed(1) + 's';
+    } else {
+      const remaining = Math.max(0, (sv.windowDeadline - performance.now()) / 1000);
+      pct = sv.windowSec > 0 ? Math.max(0, (remaining / sv.windowSec) * 100) : 0;
+      cls = pct > 50 ? 'green' : pct > 25 ? 'amber' : 'red';
+      displayText = remaining.toFixed(1) + 's';
+    }
+
+    bar.style.width = pct + '%';
+    bar.className = 'timer-bar' + (cls !== 'green' ? ' ' + cls : '');
+
+    timerEl.textContent = displayText;
+    timerEl.className = 'hud-val timer-val' + (cls !== 'green' ? ' ' + cls : '');
+
+    // Pulse the chord arena when in the red zone — tension is the point
+    arena.classList.toggle('survival-red', cls === 'red' && !state.waitingForRelease);
   },
 
   renderNoteIndicators(heldPCs, targetPCs) {
@@ -100,9 +146,11 @@ export const UI = {
     setTimeout(() => pop.remove(), 700);
   },
 
-  renderResults() {
-    const { score, chordsCompleted, attempts, difficulty } = state;
+  // modeConfig = null → Sprint; { variant, chordsSurvived, deathReason } → Survival
+  renderResults(modeConfig = null) {
+    const { attempts, difficulty } = state;
 
+    // Shared stats computation
     const totalAttempts = attempts.length;
     const cleanCount = attempts.filter(a => a.clean).length;
     const accuracy = totalAttempts > 0 ? Math.round((cleanCount / totalAttempts) * 100) : 0;
@@ -111,25 +159,6 @@ export const UI = {
       : '—';
     let bestStreak = 0, run = 0;
     for (const a of attempts) { run = a.clean ? run + 1 : 0; bestStreak = Math.max(bestStreak, run); }
-
-    const hsKey = 'chordSprint_hs_' + difficulty;
-    const prevHS = parseInt(localStorage.getItem(hsKey) || '0', 10);
-    const newHS = score > prevHS;
-    if (newHS) localStorage.setItem(hsKey, score);
-
-    document.getElementById('new-hs-badge').style.display = newHS ? 'inline-block' : 'none';
-
-    const grid = document.getElementById('stats-grid');
-    grid.innerHTML = [
-      ['Final Score',  score.toLocaleString()],
-      ['Chords Hit',   chordsCompleted],
-      ['Accuracy',     accuracy + '%'],
-      ['Avg Response', avgResponse + 's'],
-      ['Best Streak',  bestStreak],
-      ['High Score',   Math.max(score, prevHS).toLocaleString()],
-    ].map(([l, v]) =>
-      `<div class="stat-card"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`
-    ).join('');
 
     const slowest = [...attempts].sort((a, b) => b.responseMs - a.responseMs)[0];
     const wsEl = document.getElementById('weak-spot');
@@ -140,16 +169,113 @@ export const UI = {
       wsEl.style.display = 'none';
     }
 
-    const tbody = document.getElementById('per-chord-tbody');
-    tbody.innerHTML = attempts.map(a => {
-      const isSlowest = a === slowest;
-      return `<tr${isSlowest ? ' class="slowest"' : ''}>
-        <td><strong>${a.symbol}</strong></td>
-        <td>${(a.responseMs / 1000).toFixed(2)}s</td>
-        <td>${a.clean ? '<span class="clean-badge">✓ Clean</span>' : '<span class="dirty-badge">~ Corrected</span>'}</td>
-        <td>+${a.points}</td>
-      </tr>`;
-    }).join('');
+    if (modeConfig) {
+      // ── Survival results ──────────────────────────────────────────────
+      const { variant, chordsSurvived, deathReason } = modeConfig;
+      const diffLabel = ChordEngine.DIFFICULTY_POOLS[difficulty].label;
+      const variantLabel = variant === 'nm' ? 'Nightmare' : 'Standard';
+
+      document.getElementById('results-headline').textContent =
+        `You survived ${chordsSurvived} chord${chordsSurvived !== 1 ? 's' : ''}`;
+
+      const hsKey = `chordSprint_survival_${variant}_hs_${difficulty}`;
+      const prevHS = parseInt(localStorage.getItem(hsKey) || '0', 10);
+      const newHS = chordsSurvived > prevHS;
+      if (newHS) localStorage.setItem(hsKey, chordsSurvived);
+      document.getElementById('new-hs-badge').style.display = newHS ? 'inline-block' : 'none';
+
+      // Subheader: variant/difficulty + death reason
+      const subEl = document.getElementById('results-subheader');
+      subEl.style.display = 'block';
+      let deathMsg = '';
+      if (deathReason) {
+        deathMsg = deathReason.type === 'expiry'
+          ? `Window expired on <strong>${deathReason.chord}</strong>`
+          : `Wrong note on <strong>${deathReason.chord}</strong> — you played <strong>${deathReason.pitchClassName}</strong>`;
+      }
+      subEl.innerHTML =
+        `<span class="mode-tag">${variantLabel} · ${diffLabel}</span>` +
+        (deathMsg ? `<div class="death-reason">${deathMsg}</div>` : '');
+
+      // Stats grid
+      document.getElementById('stats-grid').innerHTML = [
+        ['Survived',     chordsSurvived + ' chord' + (chordsSurvived !== 1 ? 's' : '')],
+        ['Score',        state.score.toLocaleString()],
+        ['Accuracy',     accuracy + '%'],
+        ['Avg Response', avgResponse + 's'],
+        ['Best Streak',  bestStreak],
+        ['High Score',   Math.max(chordsSurvived, prevHS) + ' chords'],
+      ].map(([l, v]) =>
+        `<div class="stat-card"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`
+      ).join('');
+
+      // Per-chord table — 5 columns including Window
+      document.querySelector('.per-chord-table thead tr').innerHTML =
+        '<th>Chord</th><th>Response</th><th>Window</th><th>Quality</th><th>Points</th>';
+      document.getElementById('per-chord-tbody').innerHTML = attempts.map(a => {
+        const isSlowest = a === slowest;
+        return `<tr${isSlowest ? ' class="slowest"' : ''}>
+          <td><strong>${a.symbol}</strong></td>
+          <td>${(a.responseMs / 1000).toFixed(2)}s</td>
+          <td>${a.windowSec != null ? a.windowSec.toFixed(1) + 's' : '—'}</td>
+          <td>${a.clean ? '<span class="clean-badge">✓ Clean</span>' : '<span class="dirty-badge">~ Corrected</span>'}</td>
+          <td>+${a.points}</td>
+        </tr>`;
+      }).join('');
+
+    } else {
+      // ── Sprint results ────────────────────────────────────────────────
+      const { score, chordsCompleted } = state;
+
+      document.getElementById('results-headline').textContent = 'Round Over';
+      document.getElementById('results-subheader').style.display = 'none';
+
+      const hsKey = 'chordSprint_hs_' + difficulty;
+      const prevHS = parseInt(localStorage.getItem(hsKey) || '0', 10);
+      const newHS = score > prevHS;
+      if (newHS) localStorage.setItem(hsKey, score);
+      document.getElementById('new-hs-badge').style.display = newHS ? 'inline-block' : 'none';
+
+      document.getElementById('stats-grid').innerHTML = [
+        ['Final Score',  score.toLocaleString()],
+        ['Chords Hit',   chordsCompleted],
+        ['Accuracy',     accuracy + '%'],
+        ['Avg Response', avgResponse + 's'],
+        ['Best Streak',  bestStreak],
+        ['High Score',   Math.max(score, prevHS).toLocaleString()],
+      ].map(([l, v]) =>
+        `<div class="stat-card"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`
+      ).join('');
+
+      // Per-chord table — 4 columns (Sprint standard)
+      document.querySelector('.per-chord-table thead tr').innerHTML =
+        '<th>Chord</th><th>Response</th><th>Quality</th><th>Points</th>';
+      document.getElementById('per-chord-tbody').innerHTML = attempts.map(a => {
+        const isSlowest = a === slowest;
+        return `<tr${isSlowest ? ' class="slowest"' : ''}>
+          <td><strong>${a.symbol}</strong></td>
+          <td>${(a.responseMs / 1000).toFixed(2)}s</td>
+          <td>${a.clean ? '<span class="clean-badge">✓ Clean</span>' : '<span class="dirty-badge">~ Corrected</span>'}</td>
+          <td>+${a.points}</td>
+        </tr>`;
+      }).join('');
+    }
+  },
+
+  renderHSPanel() {
+    const hsList = document.getElementById('hs-list');
+    if (state.mode === 'survival') {
+      const variant = state.selectedVariant;
+      hsList.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) => {
+        const hs = localStorage.getItem(`chordSprint_survival_${variant}_hs_${i}`);
+        return `<div class="hs-row"><span>${d.label}</span><span class="hs-val">${hs ? hs + ' chords' : '—'}</span></div>`;
+      }).join('');
+    } else {
+      hsList.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) => {
+        const hs = localStorage.getItem('chordSprint_hs_' + i);
+        return `<div class="hs-row"><span>${d.label}</span><span class="hs-val">${hs ? parseInt(hs).toLocaleString() : '—'}</span></div>`;
+      }).join('');
+    }
   },
 
   renderMenu() {
@@ -165,13 +291,20 @@ export const UI = {
       btn.addEventListener('click', () => {
         state.difficulty = parseInt(btn.dataset.diff);
         grid.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('selected', b === btn));
+        UI.renderHSPanel();
       });
     });
 
-    const hsList = document.getElementById('hs-list');
-    hsList.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) => {
-      const hs = localStorage.getItem('chordSprint_hs_' + i) || '—';
-      return `<div class="hs-row"><span>${d.label}</span><span class="hs-val">${hs === '—' ? '—' : parseInt(hs).toLocaleString()}</span></div>`;
-    }).join('');
+    // Sync mode/variant button selected state and variant selector visibility
+    document.querySelectorAll('.mode-btn').forEach(b => {
+      b.classList.toggle('selected', b.dataset.mode === state.mode);
+    });
+    document.querySelectorAll('.variant-btn').forEach(b => {
+      b.classList.toggle('selected', b.dataset.variant === state.selectedVariant);
+    });
+    document.getElementById('variant-selector').style.display =
+      state.mode === 'survival' ? 'flex' : 'none';
+
+    UI.renderHSPanel();
   },
 };
