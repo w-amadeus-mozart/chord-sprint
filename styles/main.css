@@ -384,6 +384,76 @@
   }
   .weak-spot span { color: var(--amber); font-weight: 700; }
 
+  /* ── Death Sequence ── */
+
+  /* Overlay sits on top of the chord-arena content during dying state */
+  #death-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 72px; font-weight: 900; letter-spacing: -1px;
+    color: var(--red);
+    pointer-events: none; z-index: 8;
+    opacity: 0; transition: opacity 0.12s;
+  }
+  #death-overlay.visible { opacity: 1; }
+  #death-overlay.expiry { color: var(--amber); font-size: 52px; letter-spacing: 5px; }
+
+  /* Chord desaturates and fades when the window expires */
+  .chord-dying {
+    filter: grayscale(1);
+    opacity: 0.28;
+    transition: filter 0.4s ease, opacity 0.4s ease;
+  }
+
+  /* Full-arena red flash for Nightmare wrong-note death */
+  @keyframes arenaFlashRed {
+    0%   { background: rgba(248,113,113,0.38); box-shadow: inset 0 0 80px rgba(248,113,113,0.45); }
+    100% { background: var(--surface); box-shadow: none; }
+  }
+  .arena-flash-red { animation: arenaFlashRed 0.4s ease forwards; }
+
+  /* Horizontal shake — disabled for users who prefer reduced motion */
+  @keyframes arenaShake {
+    0%, 100% { transform: translateX(0); }
+    15%  { transform: translateX(-10px); }
+    30%  { transform: translateX(10px); }
+    45%  { transform: translateX(-7px); }
+    60%  { transform: translateX(7px); }
+    75%  { transform: translateX(-4px); }
+    90%  { transform: translateX(3px); }
+  }
+  .chord-shake { animation: arenaShake 0.42s ease; }
+  @media (prefers-reduced-motion: reduce) { .chord-shake { animation: none; } }
+
+  /* Game screen fade-out before switching to results */
+  @keyframes screenFadeOut {
+    0%   { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .screen-fadeout { animation: screenFadeOut 0.6s ease forwards; pointer-events: none; }
+
+  /* Results screen fade-in on natural death path */
+  @keyframes screenFadeIn {
+    0%   { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  .screen-fadein { animation: screenFadeIn 0.4s ease forwards; }
+
+  /* Sprint TIME! flash — brief, neutral amber; not death-red */
+  .sprint-time-flash {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 52px; font-weight: 900; letter-spacing: 5px;
+    color: var(--amber); pointer-events: none; z-index: 8;
+    animation: sprintTimeFlash 0.55s ease forwards;
+  }
+  @keyframes sprintTimeFlash {
+    0%   { opacity: 0; transform: scale(0.85); }
+    18%  { opacity: 1; transform: scale(1.06); }
+    75%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1); }
+  }
+
   .results-btns { display: flex; gap: 14px; }
   .btn-primary {
     padding: 14px 36px; border-radius: 12px;

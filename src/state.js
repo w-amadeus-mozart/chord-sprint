@@ -4,7 +4,7 @@
 export const SPRINT_DURATION = 60; // seconds — change here for 30/90/120s variants
 
 export const state = {
-  screen: 'menu',         // 'menu' | 'game' | 'results'
+  screen: 'menu',         // 'menu' | 'game' | 'results' | 'dying'
   difficulty: 0,          // 0–5
   mode: 'sprint',         // 'sprint' | 'survival'
   selectedVariant: 'std', // 'std' | 'nm' — chosen on menu for survival

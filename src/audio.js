@@ -69,12 +69,51 @@ function playDeathSound() {
   });
 }
 
+// Descending two-note wah — window expired before you could play the chord
+function playExpiryWah() {
+  if (muted) return;
+  const c = getCtx();
+  const now = c.currentTime;
+  [329.6, 246.9].forEach((freq, i) => {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = 'triangle';
+    const t = now + i * 0.22;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.18, t + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.52);
+    osc.start(t);
+    osc.stop(t + 0.57);
+  });
+}
+
+// Minor-2nd cluster — maximum harmonic dissonance for a wrong-note kill
+function playWrongNoteHit() {
+  if (muted) return;
+  const c = getCtx();
+  const now = c.currentTime;
+  [220, 233.1].forEach((freq) => {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.13, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    osc.start(now);
+    osc.stop(now + 0.37);
+  });
+}
+
 function toggleMute() { muted = !muted; return muted; }
 
 export const GameAudio = {
   playSuccessChime,
   playUnlockChime,
   playDeathSound,
+  playExpiryWah,
+  playWrongNoteHit,
   toggleMute,
   isMuted: () => muted,
 };

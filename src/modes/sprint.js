@@ -119,7 +119,17 @@ export const SprintMode = {
     clearInterval(state.timerInterval);
     state.timeLeft = 0;
     state.screen = 'results';
-    UI.renderResults();
-    showScreen('results');
+
+    // Brief TIME! flash on arena before switching to results
+    const arena = document.getElementById('chord-arena');
+    const flash = document.createElement('div');
+    flash.className = 'sprint-time-flash';
+    flash.textContent = 'TIME!';
+    arena.appendChild(flash);
+    setTimeout(() => {
+      flash.remove();
+      UI.renderResults();
+      showScreen('results');
+    }, 350);
   },
 };

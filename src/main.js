@@ -9,7 +9,7 @@ import { GameAudio } from './audio.js';
 import { UI, showScreen } from './ui.js';
 import { buildPiano, KEY_MAP } from './piano.js';
 import { SprintMode } from './modes/sprint.js';
-import { SurvivalMode } from './modes/survival.js';
+import { SurvivalMode, skipDeath } from './modes/survival.js';
 
 // ── MIDI status bar ──────────────────────────────────────
 function updateMidiStatus() {
@@ -38,6 +38,10 @@ function flashMidiActivity() {
 MidiInput.on((type) => {
   if (type === 'notesChanged') {
     flashMidiActivity();
+    if (state.screen === 'dying') {
+      skipDeath();
+      return;
+    }
     if (state.screen === 'game') {
       if (state.mode === 'survival') {
         SurvivalMode.onNotesChanged();
@@ -75,6 +79,7 @@ document.getElementById('mute-btn').addEventListener('click', () => {
 const pressedKeys = new Set();
 document.addEventListener('keydown', e => {
   if (e.repeat) return;
+  if (state.screen === 'dying') { skipDeath(); return; }
   const key = e.key.toLowerCase();
   if (KEY_MAP[key] !== undefined && !pressedKeys.has(key)) {
     pressedKeys.add(key);
@@ -87,6 +92,11 @@ document.addEventListener('keyup', e => {
     pressedKeys.delete(key);
     MidiInput.injectNoteOff(KEY_MAP[key]);
   }
+});
+
+// ── Click anywhere during dying state skips to results ───
+document.addEventListener('click', () => {
+  if (state.screen === 'dying') skipDeath();
 });
 
 // ── Page visibility — pause timer and response/window clock ─────

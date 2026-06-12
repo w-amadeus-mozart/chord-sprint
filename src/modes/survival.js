@@ -16,6 +16,61 @@ export const WINDOW_FLOOR_STD = 2.0;  // Standard mode minimum window
 export const WINDOW_FLOOR_NM  = 2.5;  // Nightmare mode minimum window
 export const UNLOCK_GRACE_SEC = 1.5;  // extra seconds added to first chord after a tier unlock
 
+const DEATH_TIMINGS = {
+  deathMs:   400,   // initial shock visual duration
+  holdMs:   1200,   // hold the death frame before fading
+  fadeOutMs: 600,   // game screen fades out
+  fadeInMs:  400,   // results screen fades in
+};
+
+let _deathTimers = [];
+function _clearDeathTimers() {
+  _deathTimers.forEach(clearTimeout);
+  _deathTimers = [];
+}
+
+// Shared path to results — called by both the natural timeout sequence and any skip input.
+// withFadeIn: true on the natural path (results fade in); false on skip (instant cut).
+function finishDeath(withFadeIn) {
+  _clearDeathTimers();
+
+  const arena   = document.getElementById('chord-arena');
+  const display = document.getElementById('chord-display');
+  const overlay = document.getElementById('death-overlay');
+  const gameEl  = document.getElementById('game');
+
+  arena.classList.remove('arena-flash-red', 'chord-shake', 'survival-red');
+  display.classList.remove('chord-dying');
+  display.style.color = '';
+  overlay.className = '';
+  overlay.textContent = '';
+  gameEl.classList.remove('screen-fadeout');
+
+  state.screen = 'results';
+
+  UI.renderResults({
+    variant:        state.survival.variant,
+    chordsSurvived: state.survival.chordsSurvived,
+    tierIndex:      state.survival.tierIndex,
+    unlockEvents:   state.survival.unlockEvents,
+    deathReason:    state.survival.deathReason,
+  });
+
+  if (withFadeIn) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const resultsEl = document.getElementById('results');
+    resultsEl.classList.add('active', 'screen-fadein');
+    setTimeout(() => resultsEl.classList.remove('screen-fadein'), DEATH_TIMINGS.fadeInMs + 60);
+  } else {
+    showScreen('results');
+  }
+}
+
+export function skipDeath() {
+  if (state.screen !== 'dying') return;
+  finishDeath(false);
+}
+
 function calcWindow(chordsSurvived, variant) {
   const floor = variant === 'nm' ? WINDOW_FLOOR_NM : WINDOW_FLOOR_STD;
   const N = chordsSurvived + 1; // 1-indexed chord number
@@ -70,6 +125,7 @@ function computeNextUnlockHint() {
 
 export const SurvivalMode = {
   start(variant) {
+    _clearDeathTimers();
     state.mode = 'survival';
     state.screen = 'game';
     state.score = 0;
@@ -103,6 +159,13 @@ export const SurvivalMode = {
     // First chord: no prior release gate — window already running
     state.currentChord = pickSurvivalChord(activePool, null, 0, null);
     state.attemptStart = performance.now();
+
+    // Clean up any residual death visuals from a prior run
+    document.getElementById('death-overlay').className = '';
+    document.getElementById('death-overlay').textContent = '';
+    document.getElementById('chord-display').classList.remove('chord-dying');
+    document.getElementById('chord-display').style.color = '';
+    document.getElementById('chord-arena').classList.remove('arena-flash-red', 'chord-shake');
 
     showScreen('game');
 
@@ -303,17 +366,39 @@ export const SurvivalMode = {
 
   end(deathReason) {
     clearInterval(state.timerInterval);
+    _clearDeathTimers();
     state.survival.deathReason = deathReason;
-    state.screen = 'results';
-    document.getElementById('chord-arena').classList.remove('survival-red');
-    GameAudio.playDeathSound();
-    UI.renderResults({
-      variant: state.survival.variant,
-      chordsSurvived: state.survival.chordsSurvived,
-      tierIndex: state.survival.tierIndex,
-      unlockEvents: state.survival.unlockEvents,
-      deathReason,
-    });
-    showScreen('results');
+    state.screen = 'dying';
+
+    const arena   = document.getElementById('chord-arena');
+    const display = document.getElementById('chord-display');
+    const overlay = document.getElementById('death-overlay');
+
+    arena.classList.remove('survival-red');
+
+    if (deathReason.type === 'wrongNote') {
+      // Nightmare wrong-note death: red flash, shake, chord snaps red, skull overlay
+      arena.classList.add('arena-flash-red', 'chord-shake');
+      display.style.color = 'var(--red)';
+      overlay.textContent = '☠';
+      overlay.classList.add('visible');
+      GameAudio.playWrongNoteHit();
+    } else {
+      // Window expiry: chord desaturates/fades, TIME overlay
+      display.classList.add('chord-dying');
+      overlay.textContent = 'TIME';
+      overlay.classList.add('visible', 'expiry');
+      GameAudio.playExpiryWah();
+    }
+
+    const holdEnd = DEATH_TIMINGS.deathMs + DEATH_TIMINGS.holdMs;
+
+    _deathTimers.push(setTimeout(() => {
+      document.getElementById('game').classList.add('screen-fadeout');
+    }, holdEnd));
+
+    _deathTimers.push(setTimeout(() => {
+      finishDeath(true);
+    }, holdEnd + DEATH_TIMINGS.fadeOutMs));
   },
 };
