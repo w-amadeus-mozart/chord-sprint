@@ -133,7 +133,7 @@ document.querySelectorAll('.variant-btn').forEach(btn => {
 // ── Button wiring ────────────────────────────────────────
 function startGame() {
   if (state.mode === 'survival') {
-    SurvivalMode.start(state.difficulty, state.selectedVariant);
+    SurvivalMode.start(state.selectedVariant); // no difficulty — survival has its own progression
   } else {
     SprintMode.start(state.difficulty);
   }
@@ -142,7 +142,7 @@ function startGame() {
 function replayGame() {
   if (state.mode === 'survival') {
     // Replay with the same variant as the just-finished run
-    SurvivalMode.start(state.difficulty, state.survival.variant);
+    SurvivalMode.start(state.survival.variant);
   } else {
     SprintMode.start(state.difficulty);
   }

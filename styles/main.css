@@ -91,6 +91,25 @@
   .mode-btn.selected .mode-btn-title { color: var(--accent); }
   .mode-btn-desc { font-size: 12px; color: var(--text-dim); }
 
+  /* ── Progression Preview (Survival menu) ── */
+  .progression-preview {
+    display: flex; align-items: center; gap: 4px;
+    flex-wrap: wrap; justify-content: center;
+    width: 100%; max-width: 520px;
+    padding: 10px 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .prog-step {
+    padding: 3px 9px; border-radius: 5px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 12px; font-weight: 600; white-space: nowrap;
+  }
+  .prog-step.prog-start {
+    border-color: var(--accent); color: var(--accent);
+  }
+  .prog-step em { color: var(--text-dim); font-style: normal; font-size: 10px; margin-right: 3px; }
+  .prog-arrow { color: var(--border); font-size: 11px; line-height: 1; }
+
   /* ── Variant Selector (Survival: Standard / Nightmare) ── */
   .variant-selector {
     display: flex; gap: 8px; width: 100%; max-width: 520px;
@@ -222,6 +241,23 @@
   .note-pip.wrong { background: var(--red); border-color: var(--red); color: white; animation: wrongPip 0.3s; }
   @keyframes wrongPip { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
 
+  /* Unlock banner — slides in from above, auto-removes after 1.5s */
+  @keyframes unlockSlide {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(-18px); }
+    12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    75%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  }
+  .unlock-banner {
+    position: absolute; top: 14px; left: 50%;
+    transform: translateX(-50%);
+    padding: 5px 16px; border-radius: 8px;
+    background: var(--accent); color: #fff;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+    pointer-events: none; white-space: nowrap; z-index: 10;
+    animation: unlockSlide 1.6s ease forwards;
+  }
+
   /* Survival red-zone pulse — tension is the point */
   @keyframes survivalPulse {
     0%, 100% { border-color: var(--border); box-shadow: none; }
@@ -291,8 +327,20 @@
     font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 1px; color: var(--text-dim);
   }
+  .tier-reached {
+    margin-top: 6px; font-size: 14px; color: var(--accent); font-weight: 700;
+  }
   .death-reason {
-    margin-top: 8px; font-size: 15px; color: var(--red); font-weight: 600;
+    margin-top: 6px; font-size: 15px; color: var(--red); font-weight: 600;
+  }
+
+  /* Unlock badge inside per-chord table rows */
+  .unlock-badge {
+    display: inline-block; margin-left: 6px;
+    padding: 1px 6px; border-radius: 4px;
+    background: rgba(124,111,255,0.15); border: 1px solid var(--accent);
+    color: var(--accent); font-size: 10px; font-weight: 700;
+    letter-spacing: 0.5px; vertical-align: middle;
   }
   .new-hs-badge {
     display: inline-block; margin-top: 8px;

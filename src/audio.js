@@ -30,6 +30,26 @@ function playSuccessChime(pitchClasses) {
   });
 }
 
+function playUnlockChime() {
+  if (muted) return;
+  const c = getCtx();
+  const now = c.currentTime;
+  // Two ascending tones — G4 then E5 — bright "level up" feel
+  [392, 659.3].forEach((freq, i) => {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    const t = now + i * 0.1;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.14, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    osc.start(t);
+    osc.stop(t + 0.45);
+  });
+}
+
 function playDeathSound() {
   if (muted) return;
   const c = getCtx();
@@ -53,6 +73,7 @@ function toggleMute() { muted = !muted; return muted; }
 
 export const GameAudio = {
   playSuccessChime,
+  playUnlockChime,
   playDeathSound,
   toggleMute,
   isMuted: () => muted,

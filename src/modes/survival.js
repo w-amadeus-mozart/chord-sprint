@@ -1,30 +1,77 @@
 // Survival game mode — "how long can you last?"
-// Each chord has its own countdown window that shrinks as you survive longer.
+// Runs start with Major triads only; chord types unlock automatically as you survive longer.
 // Implements the GameMode interface: start(), onTick(), onNotesChanged(), onChordMatched(), end()
+// No difficulty levels — progression is driven solely by chords survived.
 
 import { state } from '../state.js';
 import { ChordEngine } from '../chords.js';
 import { MidiInput } from '../midi.js';
 import { GameAudio } from '../audio.js';
 import { UI, showScreen } from '../ui.js';
+import { UNLOCK_LADDER } from '../unlockLadder.js';
 
 export const WINDOW_START     = 8.0;  // seconds for the very first chord
-export const WINDOW_DECAY     = 0.15; // seconds shorter per chord
-export const WINDOW_FLOOR_STD = 2.0;  // minimum window in Standard
-export const WINDOW_FLOOR_NM  = 2.5;  // minimum window in Nightmare (more generous floor since wrong notes already kill)
+export const WINDOW_DECAY     = 0.10; // seconds shorter per chord (softened from 0.15)
+export const WINDOW_FLOOR_STD = 2.0;  // Standard mode minimum window
+export const WINDOW_FLOOR_NM  = 2.5;  // Nightmare mode minimum window
+export const UNLOCK_GRACE_SEC = 1.5;  // extra seconds added to first chord after a tier unlock
 
 function calcWindow(chordsSurvived, variant) {
   const floor = variant === 'nm' ? WINDOW_FLOOR_NM : WINDOW_FLOOR_STD;
-  // N = 1-indexed chord number; chordsSurvived is count of already-matched chords
-  const N = chordsSurvived + 1;
+  const N = chordsSurvived + 1; // 1-indexed chord number
   return Math.max(floor, WINDOW_START - (N - 1) * WINDOW_DECAY);
 }
 
+// Build a pool of all chords for every type in tiers 0..tierIndex (by name, not index).
+function buildActivePool(tierIndex) {
+  const typeNames = new Set();
+  for (let i = 0; i <= tierIndex; i++) {
+    UNLOCK_LADDER[i].add.forEach(n => typeNames.add(n));
+  }
+  const types = ChordEngine.CHORD_TYPES.filter(ct => typeNames.has(ct.name));
+  const pool = [];
+  for (let rootPc = 0; rootPc < ChordEngine.ROOTS.length; rootPc++) {
+    const root = ChordEngine.ROOTS[rootPc];
+    for (const type of types) {
+      const pitchClasses = new Set(type.intervals.map(iv => (rootPc + iv) % 12));
+      pool.push({ root, type, symbol: root + type.symbol, pitchClasses });
+    }
+  }
+  return pool;
+}
+
+// Survival-specific chord picker.
+// For the 5 chords after an unlock, newly unlocked types are picked with 60% probability
+// so they actually show up rather than drowning in the existing pool.
+// The no-repeat rule is always respected; falls back to full pool if needed.
+export function pickSurvivalChord(activePool, recentlyUnlocked, chordsSinceUnlock, lastSymbol) {
+  if (recentlyUnlocked && recentlyUnlocked.length > 0 && chordsSinceUnlock < 5) {
+    if (Math.random() < 0.6) {
+      const candidates = recentlyUnlocked.filter(c => c.symbol !== lastSymbol);
+      if (candidates.length > 0) {
+        return candidates[Math.floor(Math.random() * candidates.length)];
+      }
+      // Only candidate was the previous symbol — fall through to full pool
+    }
+  }
+  let candidates = activePool.filter(c => c.symbol !== lastSymbol);
+  if (!candidates.length) candidates = activePool;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function computeNextUnlockHint() {
+  const nextIdx = state.survival.tierIndex + 1;
+  if (nextIdx < UNLOCK_LADDER.length) {
+    const chordsUntil = UNLOCK_LADDER[nextIdx].at - state.survival.chordsSurvived;
+    return `${UNLOCK_LADDER[nextIdx].hint} in ${chordsUntil}`;
+  }
+  return 'MAX';
+}
+
 export const SurvivalMode = {
-  start(difficultyIndex, variant) {
+  start(variant) {
     state.mode = 'survival';
     state.screen = 'game';
-    state.difficulty = difficultyIndex;
     state.score = 0;
     state.streak = 0;
     state.multiplier = 1;
@@ -32,27 +79,36 @@ export const SurvivalMode = {
     state.waitingForRelease = false;
     state.attemptDirty = false;
     state.attempts = [];
-    state.pool = ChordEngine.buildPool(difficultyIndex);
-    state.currentChord = ChordEngine.pickChord(state.pool, null);
-    state.attemptStart = performance.now();
-    state.timerStart = Date.now(); // kept for visibility-handler compatibility
+    state.pool = []; // survival uses state.survival.activePool; clear to avoid stale Sprint data
+    state.timerStart = Date.now();
 
-    // First chord window starts immediately (no prior release gate)
+    const activePool = buildActivePool(0); // start with Major triads only
     const windowSec = calcWindow(0, variant);
+
     state.survival = {
       variant,
       windowDeadline: performance.now() + windowSec * 1000,
       windowSec,
       chordsSurvived: 0,
       deathReason: null,
+      activePool,
+      recentlyUnlocked: null,
+      chordsSinceUnlock: 0,
+      tierIndex: 0,
+      nextUnlockHint: '', // filled below once state.survival exists
+      unlockEvents: [],
     };
+    state.survival.nextUnlockHint = computeNextUnlockHint();
+
+    // First chord: no prior release gate — window already running
+    state.currentChord = pickSurvivalChord(activePool, null, 0, null);
+    state.attemptStart = performance.now();
 
     showScreen('game');
 
-    // Update HUD labels for survival
     document.getElementById('hud-label-score').textContent = 'Survived';
     document.getElementById('hud-label-timer').textContent = 'Window';
-    document.getElementById('hud-label-chords').textContent = 'Score';
+    document.getElementById('hud-label-chords').textContent = 'Next';
     document.getElementById('nightmare-badge').style.display =
       variant === 'nm' ? 'block' : 'none';
 
@@ -66,7 +122,7 @@ export const SurvivalMode = {
   onTick() {
     if (document.hidden) return;
 
-    // During release gate the window hasn't started yet — just keep bar at full
+    // During release gate the window hasn't started yet — keep bar at full
     if (state.waitingForRelease) {
       UI.renderSurvivalTimer();
       return;
@@ -87,7 +143,7 @@ export const SurvivalMode = {
     const held = MidiInput.getHeld();
     const heldPCs = ChordEngine.toPitchClasses(held);
 
-    // Release gate: show held keys in neutral, wait for all-released
+    // Release gate: show neutral indicators and wait for all keys up
     if (state.waitingForRelease) {
       UI.renderNoteIndicatorsReleasing(heldPCs);
       if (MidiInput.allReleased()) {
@@ -101,7 +157,7 @@ export const SurvivalMode = {
       return;
     }
 
-    // Exact expiry check — a match arriving after the deadline doesn't count
+    // Exact expiry check — a match arriving after the deadline never counts
     const now = performance.now();
     if (now >= state.survival.windowDeadline) {
       SurvivalMode.end({ type: 'expiry', chord: state.currentChord.symbol });
@@ -110,8 +166,8 @@ export const SurvivalMode = {
 
     const target = state.currentChord.pitchClasses;
 
-    // Nightmare: any wrong pitch class after the gate clears → instant death
-    // (Notes held from the previous chord during the gate phase are excluded above via early return)
+    // Nightmare: any wrong pitch class after the gate clears → instant death.
+    // Notes held from the previous chord during the gate phase are excluded via the early return above.
     if (state.survival.variant === 'nm') {
       for (const pc of heldPCs) {
         if (!target.has(pc)) {
@@ -125,7 +181,7 @@ export const SurvivalMode = {
       }
     }
 
-    // Standard: mark attempt dirty if any wrong pitch class pressed
+    // Standard: mark attempt dirty if any wrong pitch class is pressed
     if (!state.attemptDirty) {
       for (const pc of heldPCs) {
         if (!target.has(pc)) { state.attemptDirty = true; break; }
@@ -135,7 +191,7 @@ export const SurvivalMode = {
     UI.renderNoteIndicators(heldPCs, target);
 
     if (ChordEngine.isMatch(heldPCs, target)) {
-      // Re-check deadline at the exact moment of match (microsecond precision)
+      // Re-check at exact moment of match
       if (performance.now() >= state.survival.windowDeadline) {
         SurvivalMode.end({ type: 'expiry', chord: state.currentChord.symbol });
         return;
@@ -161,8 +217,7 @@ export const SurvivalMode = {
       state.multiplier = 1;
     }
 
-    // Speed bonus scaled to current window: measures time used after gate cleared
-    // windowUsedSec = windowSec - remaining, where remaining = (deadline - now) / 1000
+    // Speed bonus: gate-relative time used as fraction of the window
     const windowUsedSec = state.survival.windowSec -
       Math.max(0, (state.survival.windowDeadline - now) / 1000);
     const speedRatio = windowUsedSec / state.survival.windowSec;
@@ -185,15 +240,59 @@ export const SurvivalMode = {
     UI.flashMatch(points);
     GameAudio.playSuccessChime(state.currentChord.pitchClasses);
 
-    // Queue next chord — set attemptStart NOW so reading time during release is counted
+    // Base window for next chord
+    state.survival.windowSec = calcWindow(state.survival.chordsSurvived, state.survival.variant);
+
+    // Check for tier unlock (exact threshold match)
+    const nextTierIdx = state.survival.tierIndex + 1;
+    if (nextTierIdx < UNLOCK_LADDER.length &&
+        UNLOCK_LADDER[nextTierIdx].at === state.survival.chordsSurvived) {
+      const tier = UNLOCK_LADDER[nextTierIdx];
+      state.survival.tierIndex = nextTierIdx;
+
+      // Rebuild pool to include newly unlocked types
+      state.survival.activePool = buildActivePool(nextTierIdx);
+
+      // Track new chords for the 60% weighting window (5 chords)
+      const newTypeNames = new Set(tier.add);
+      state.survival.recentlyUnlocked = state.survival.activePool.filter(
+        c => newTypeNames.has(c.type.name)
+      );
+      state.survival.chordsSinceUnlock = 0;
+
+      // Badge on the attempt that triggered the unlock
+      state.survival.unlockEvents.push({
+        attemptIndex: state.attempts.length - 1,
+        label: tier.label,
+      });
+
+      // Grace: next chord gets extra time — new shapes deserve a breath
+      state.survival.windowSec += UNLOCK_GRACE_SEC;
+
+      UI.showUnlockBanner(tier.label);
+      GameAudio.playUnlockChime();
+    }
+
+    // Update HUD countdown to next tier
+    state.survival.nextUnlockHint = computeNextUnlockHint();
+
+    // Pick next chord using the survival-specific picker
     const prev = state.currentChord.symbol;
-    state.currentChord = ChordEngine.pickChord(state.pool, prev);
+    state.currentChord = pickSurvivalChord(
+      state.survival.activePool,
+      state.survival.recentlyUnlocked,
+      state.survival.chordsSinceUnlock,
+      prev
+    );
     state.attemptStart = performance.now();
 
-    // Calculate window for next chord (N = chordsSurvived + 1 after increment)
-    state.survival.windowSec = calcWindow(state.survival.chordsSurvived, state.survival.variant);
-    // windowDeadline will be set precisely when the release gate clears
+    // Advance the post-unlock counter; clear weighting after 5 picks
+    state.survival.chordsSinceUnlock++;
+    if (state.survival.chordsSinceUnlock >= 5) {
+      state.survival.recentlyUnlocked = null;
+    }
 
+    // windowDeadline will be set precisely when the release gate clears
     state.waitingForRelease = true;
     state.attemptDirty = false;
 
@@ -211,6 +310,8 @@ export const SurvivalMode = {
     UI.renderResults({
       variant: state.survival.variant,
       chordsSurvived: state.survival.chordsSurvived,
+      tierIndex: state.survival.tierIndex,
+      unlockEvents: state.survival.unlockEvents,
       deathReason,
     });
     showScreen('results');

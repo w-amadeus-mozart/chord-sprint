@@ -1,10 +1,12 @@
 // UI rendering, screen management.
-// Imports: state, chords (for ROOTS/DIFFICULTY_POOLS), piano (for updatePianoColors).
+// Imports: state, chords (for ROOTS/DIFFICULTY_POOLS), piano (for updatePianoColors),
+//          unlockLadder (for menu progression preview and results tier display).
 // Does NOT import audio or midi — callers supply data, UI only renders.
 
 import { state, SPRINT_DURATION } from './state.js';
 import { ChordEngine } from './chords.js';
 import { updatePianoColors } from './piano.js';
+import { UNLOCK_LADDER } from './unlockLadder.js';
 
 export function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
@@ -37,7 +39,8 @@ export const UI = {
     document.getElementById('hud-streak').textContent = state.streak;
     document.getElementById('hud-mult').textContent =
       '×' + (state.multiplier % 1 === 0 ? state.multiplier : state.multiplier.toFixed(1));
-    document.getElementById('hud-chords').textContent = state.score.toLocaleString();
+    // 5th slot: next unlock countdown ("Minor in 3") or "MAX"
+    document.getElementById('hud-chords').textContent = sv.nextUnlockHint;
     UI.renderStreakFire();
   },
 
@@ -83,6 +86,16 @@ export const UI = {
     arena.classList.toggle('survival-red', cls === 'red' && !state.waitingForRelease);
   },
 
+  // Show a brief banner in the chord arena when a new tier unlocks (non-blocking)
+  showUnlockBanner(label) {
+    const arena = document.getElementById('chord-arena');
+    const banner = document.createElement('div');
+    banner.className = 'unlock-banner';
+    banner.textContent = label;
+    arena.appendChild(banner);
+    setTimeout(() => banner.remove(), 1600);
+  },
+
   renderNoteIndicators(heldPCs, targetPCs) {
     const container = document.getElementById('note-indicators');
     container.innerHTML = '';
@@ -93,7 +106,6 @@ export const UI = {
       if (heldPCs.has(pc)) pip.classList.add('held');
       container.appendChild(pip);
     }
-    // Show wrong notes
     for (const pc of heldPCs) {
       if (!targetPCs.has(pc)) {
         const pip = document.createElement('div');
@@ -130,7 +142,6 @@ export const UI = {
     else                          el.textContent = '';
   },
 
-  // Visual-only match flash — caller is responsible for playing the audio chime
   flashMatch(points) {
     const disp = document.getElementById('chord-display');
     disp.classList.remove('match');
@@ -146,7 +157,7 @@ export const UI = {
     setTimeout(() => pop.remove(), 700);
   },
 
-  // modeConfig = null → Sprint; { variant, chordsSurvived, deathReason } → Survival
+  // modeConfig = null → Sprint; { variant, chordsSurvived, tierIndex, unlockEvents, deathReason } → Survival
   renderResults(modeConfig = null) {
     const { attempts, difficulty } = state;
 
@@ -171,20 +182,21 @@ export const UI = {
 
     if (modeConfig) {
       // ── Survival results ──────────────────────────────────────────────
-      const { variant, chordsSurvived, deathReason } = modeConfig;
-      const diffLabel = ChordEngine.DIFFICULTY_POOLS[difficulty].label;
+      const { variant, chordsSurvived, tierIndex, unlockEvents, deathReason } = modeConfig;
       const variantLabel = variant === 'nm' ? 'Nightmare' : 'Standard';
+      const tierReached = UNLOCK_LADDER[tierIndex].reached;
 
       document.getElementById('results-headline').textContent =
         `You survived ${chordsSurvived} chord${chordsSurvived !== 1 ? 's' : ''}`;
 
-      const hsKey = `chordSprint_survival_${variant}_hs_${difficulty}`;
+      // High score: per-variant only (no difficulty suffix)
+      const hsKey = `chordSprint_survival_${variant}_hs`;
       const prevHS = parseInt(localStorage.getItem(hsKey) || '0', 10);
       const newHS = chordsSurvived > prevHS;
       if (newHS) localStorage.setItem(hsKey, chordsSurvived);
       document.getElementById('new-hs-badge').style.display = newHS ? 'inline-block' : 'none';
 
-      // Subheader: variant/difficulty + death reason
+      // Subheader: variant tag, tier reached, death reason
       const subEl = document.getElementById('results-subheader');
       subEl.style.display = 'block';
       let deathMsg = '';
@@ -194,7 +206,8 @@ export const UI = {
           : `Wrong note on <strong>${deathReason.chord}</strong> — you played <strong>${deathReason.pitchClassName}</strong>`;
       }
       subEl.innerHTML =
-        `<span class="mode-tag">${variantLabel} · ${diffLabel}</span>` +
+        `<span class="mode-tag">${variantLabel}</span>` +
+        `<div class="tier-reached">Reached: ${tierReached}</div>` +
         (deathMsg ? `<div class="death-reason">${deathMsg}</div>` : '');
 
       // Stats grid
@@ -209,13 +222,22 @@ export const UI = {
         `<div class="stat-card"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`
       ).join('');
 
-      // Per-chord table — 5 columns including Window
+      // Build a lookup from attemptIndex to unlock label for table badges
+      const unlockByIndex = new Map(
+        (unlockEvents || []).map(e => [e.attemptIndex, e.label])
+      );
+
+      // Per-chord table — 5 columns including Window; unlock badges on trigger rows
       document.querySelector('.per-chord-table thead tr').innerHTML =
         '<th>Chord</th><th>Response</th><th>Window</th><th>Quality</th><th>Points</th>';
-      document.getElementById('per-chord-tbody').innerHTML = attempts.map(a => {
+      document.getElementById('per-chord-tbody').innerHTML = attempts.map((a, idx) => {
         const isSlowest = a === slowest;
+        const unlockLabel = unlockByIndex.get(idx);
+        const unlockBadge = unlockLabel
+          ? `<span class="unlock-badge">★ ${unlockLabel.replace(' unlocked', '')}</span>`
+          : '';
         return `<tr${isSlowest ? ' class="slowest"' : ''}>
-          <td><strong>${a.symbol}</strong></td>
+          <td><strong>${a.symbol}</strong>${unlockBadge}</td>
           <td>${(a.responseMs / 1000).toFixed(2)}s</td>
           <td>${a.windowSec != null ? a.windowSec.toFixed(1) + 's' : '—'}</td>
           <td>${a.clean ? '<span class="clean-badge">✓ Clean</span>' : '<span class="dirty-badge">~ Corrected</span>'}</td>
@@ -265,10 +287,11 @@ export const UI = {
   renderHSPanel() {
     const hsList = document.getElementById('hs-list');
     if (state.mode === 'survival') {
-      const variant = state.selectedVariant;
-      hsList.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) => {
-        const hs = localStorage.getItem(`chordSprint_survival_${variant}_hs_${i}`);
-        return `<div class="hs-row"><span>${d.label}</span><span class="hs-val">${hs ? hs + ' chords' : '—'}</span></div>`;
+      // One row per variant (no difficulty suffix — survival has no levels)
+      hsList.innerHTML = ['std', 'nm'].map(v => {
+        const label = v === 'nm' ? 'Nightmare' : 'Standard';
+        const hs = localStorage.getItem(`chordSprint_survival_${v}_hs`);
+        return `<div class="hs-row"><span>${label}</span><span class="hs-val">${hs ? hs + ' chords' : '—'}</span></div>`;
       }).join('');
     } else {
       hsList.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) => {
@@ -278,24 +301,46 @@ export const UI = {
     }
   },
 
-  renderMenu() {
-    const grid = document.getElementById('difficulty-grid');
-    grid.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) =>
-      `<button class="diff-btn${state.difficulty === i ? ' selected' : ''}" data-diff="${i}">
-        <span class="diff-num">${i + 1}</span>
-        <div class="diff-name">${d.label}</div>
-        <div class="diff-desc">${d.desc}</div>
-      </button>`
-    ).join('');
-    grid.querySelectorAll('.diff-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.difficulty = parseInt(btn.dataset.diff);
-        grid.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('selected', b === btn));
-        UI.renderHSPanel();
-      });
-    });
+  renderProgressionPreview() {
+    const container = document.getElementById('progression-preview');
+    container.innerHTML = UNLOCK_LADDER.map((tier, i) => {
+      if (i === 0) {
+        return `<span class="prog-step prog-start">${tier.add[0]}</span>`;
+      }
+      return `<span class="prog-arrow">→</span>` +
+             `<span class="prog-step"><em>${tier.at}:</em> ${tier.reached}</span>`;
+    }).join('');
+  },
 
-    // Sync mode/variant button selected state and variant selector visibility
+  renderMenu() {
+    const isSurvival = state.mode === 'survival';
+
+    // Difficulty grid: shown for Sprint, hidden for Survival
+    const grid = document.getElementById('difficulty-grid');
+    grid.style.display = isSurvival ? 'none' : '';
+    if (!isSurvival) {
+      grid.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) =>
+        `<button class="diff-btn${state.difficulty === i ? ' selected' : ''}" data-diff="${i}">
+          <span class="diff-num">${i + 1}</span>
+          <div class="diff-name">${d.label}</div>
+          <div class="diff-desc">${d.desc}</div>
+        </button>`
+      ).join('');
+      grid.querySelectorAll('.diff-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.difficulty = parseInt(btn.dataset.diff);
+          grid.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('selected', b === btn));
+          UI.renderHSPanel();
+        });
+      });
+    }
+
+    // Progression preview: shown for Survival, hidden for Sprint
+    const preview = document.getElementById('progression-preview');
+    preview.style.display = isSurvival ? 'flex' : 'none';
+    if (isSurvival) UI.renderProgressionPreview();
+
+    // Sync mode/variant button selected state
     document.querySelectorAll('.mode-btn').forEach(b => {
       b.classList.toggle('selected', b.dataset.mode === state.mode);
     });
@@ -303,7 +348,7 @@ export const UI = {
       b.classList.toggle('selected', b.dataset.variant === state.selectedVariant);
     });
     document.getElementById('variant-selector').style.display =
-      state.mode === 'survival' ? 'flex' : 'none';
+      isSurvival ? 'flex' : 'none';
 
     UI.renderHSPanel();
   },
