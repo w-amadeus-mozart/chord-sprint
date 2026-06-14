@@ -113,46 +113,35 @@ export const CHARTS = [
   {
     id: 'chromatic-storm',
     title: 'Chromatic Storm',
-    subtitle: 'All 11 chord types, 1 per beat',
-    bpm: 116,
+    subtitle: 'All 11 chord types, 2 beats each',
+    bpm: 88,
     difficulty: 4,
-    totalBeats: 33,
+    totalBeats: 45,
     events: [
-      // Round 1 — one chord per beat, all types represented
+      // Round 1 — all 11 types, one chord every 2 beats
       { beat: 1,  rootPc: 0,  typeName: 'Major'            }, // C
-      { beat: 2,  rootPc: 9,  typeName: 'Minor'            }, // Am
-      { beat: 3,  rootPc: 2,  typeName: 'Diminished'       }, // Ddim
-      { beat: 4,  rootPc: 4,  typeName: 'Augmented'        }, // Eaug
-      { beat: 5,  rootPc: 7,  typeName: 'Dominant 7th'     }, // G7
-      { beat: 6,  rootPc: 0,  typeName: 'Major 7th'        }, // Cmaj7
-      { beat: 7,  rootPc: 2,  typeName: 'Minor 7th'        }, // Dm7
-      { beat: 8,  rootPc: 11, typeName: 'Half-dim (m7b5)'  }, // Bm7b5
-      { beat: 9,  rootPc: 7,  typeName: 'Diminished 7th'   }, // Gdim7
-      { beat: 10, rootPc: 0,  typeName: 'Sus2'             }, // Csus2
-      { beat: 11, rootPc: 5,  typeName: 'Sus4'             }, // Fsus4
-      // Round 2 — transposed
-      { beat: 12, rootPc: 5,  typeName: 'Major'            }, // F
-      { beat: 13, rootPc: 2,  typeName: 'Minor'            }, // Dm
-      { beat: 14, rootPc: 6,  typeName: 'Diminished'       }, // F#dim
-      { beat: 15, rootPc: 9,  typeName: 'Augmented'        }, // Aaug
-      { beat: 16, rootPc: 0,  typeName: 'Dominant 7th'     }, // C7
-      { beat: 17, rootPc: 5,  typeName: 'Major 7th'        }, // Fmaj7
-      { beat: 18, rootPc: 7,  typeName: 'Minor 7th'        }, // Gm7
-      { beat: 19, rootPc: 4,  typeName: 'Half-dim (m7b5)'  }, // Em7b5
-      { beat: 20, rootPc: 3,  typeName: 'Diminished 7th'   }, // Ebdim7
-      { beat: 21, rootPc: 7,  typeName: 'Sus2'             }, // Gsus2
-      { beat: 22, rootPc: 2,  typeName: 'Sus4'             }, // Dsus4
-      // Round 3 — up a 5th again, faster finish
-      { beat: 23, rootPc: 9,  typeName: 'Major'            }, // A
-      { beat: 24, rootPc: 6,  typeName: 'Minor'            }, // F#m
-      { beat: 25, rootPc: 11, typeName: 'Diminished'       }, // Bdim
-      { beat: 26, rootPc: 1,  typeName: 'Augmented'        }, // C#aug
-      { beat: 27, rootPc: 10, typeName: 'Dominant 7th'     }, // Bb7
-      { beat: 28, rootPc: 9,  typeName: 'Major 7th'        }, // Amaj7
-      { beat: 29, rootPc: 4,  typeName: 'Minor 7th'        }, // Em7
-      { beat: 30, rootPc: 8,  typeName: 'Half-dim (m7b5)'  }, // Abm7b5
-      { beat: 31, rootPc: 6,  typeName: 'Diminished 7th'   }, // F#dim7
-      { beat: 32, rootPc: 10, typeName: 'Sus2'             }, // Bbsus2
+      { beat: 3,  rootPc: 9,  typeName: 'Minor'            }, // Am
+      { beat: 5,  rootPc: 2,  typeName: 'Diminished'       }, // Ddim
+      { beat: 7,  rootPc: 4,  typeName: 'Augmented'        }, // Eaug
+      { beat: 9,  rootPc: 7,  typeName: 'Dominant 7th'     }, // G7
+      { beat: 11, rootPc: 0,  typeName: 'Major 7th'        }, // Cmaj7
+      { beat: 13, rootPc: 2,  typeName: 'Minor 7th'        }, // Dm7
+      { beat: 15, rootPc: 11, typeName: 'Half-dim (m7b5)'  }, // Bm7b5
+      { beat: 17, rootPc: 7,  typeName: 'Diminished 7th'   }, // Gdim7
+      { beat: 19, rootPc: 0,  typeName: 'Sus2'             }, // Csus2
+      { beat: 21, rootPc: 5,  typeName: 'Sus4'             }, // Fsus4
+      // Round 2 — same types, different roots
+      { beat: 23, rootPc: 5,  typeName: 'Major'            }, // F
+      { beat: 25, rootPc: 2,  typeName: 'Minor'            }, // Dm
+      { beat: 27, rootPc: 6,  typeName: 'Diminished'       }, // F#dim
+      { beat: 29, rootPc: 9,  typeName: 'Augmented'        }, // Aaug
+      { beat: 31, rootPc: 0,  typeName: 'Dominant 7th'     }, // C7
+      { beat: 33, rootPc: 5,  typeName: 'Major 7th'        }, // Fmaj7
+      { beat: 35, rootPc: 7,  typeName: 'Minor 7th'        }, // Gm7
+      { beat: 37, rootPc: 4,  typeName: 'Half-dim (m7b5)'  }, // Em7b5
+      { beat: 39, rootPc: 3,  typeName: 'Diminished 7th'   }, // Ebdim7
+      { beat: 41, rootPc: 7,  typeName: 'Sus2'             }, // Gsus2
+      { beat: 43, rootPc: 2,  typeName: 'Sus4'             }, // Dsus4
     ],
   },
 ];
