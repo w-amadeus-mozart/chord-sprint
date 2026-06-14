@@ -32,6 +32,10 @@
       <div class="mode-btn-title">Survival</div>
       <div class="mode-btn-desc">How long can you last?</div>
     </button>
+    <button class="mode-btn" data-mode="falling">
+      <div class="mode-btn-title">Falling</div>
+      <div class="mode-btn-desc">Hit chords on the beat</div>
+    </button>
   </div>
 
   <!-- Variant toggle — only shown when Survival is selected -->
@@ -51,6 +55,16 @@
   </div>
 
   <button id="btn-start">▶ START</button>
+</div>
+
+<!-- ══════════ SONG SELECT SCREEN ══════════ -->
+<div id="song-select" class="screen">
+  <div class="song-select-header">
+    <h2 class="song-select-title">Falling Chords</h2>
+    <p class="song-select-sub">Hit each chord as it crosses the line. Timing earns Perfect / Good / OK.</p>
+  </div>
+  <div class="song-grid" id="song-grid"></div>
+  <button class="btn-secondary" id="btn-back-from-songs">← Back to Menu</button>
 </div>
 
 <!-- ══════════ GAME SCREEN ══════════ -->
@@ -80,9 +94,12 @@
     <div class="nightmare-badge" id="nightmare-badge" style="display:none">☠ NIGHTMARE</div>
   </div>
 
-  <div class="timer-bar-wrap">
+  <div class="timer-bar-wrap" id="timer-bar-wrap">
     <div class="timer-bar" id="timer-bar"></div>
   </div>
+
+  <!-- Falling Chords lane — hidden unless mode === 'falling' -->
+  <canvas id="lane-canvas" style="display:none"></canvas>
 
   <div class="chord-arena" id="chord-arena">
     <div class="streak-fire" id="streak-fire"></div>

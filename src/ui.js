@@ -7,6 +7,7 @@ import { state, SPRINT_DURATION } from './state.js';
 import { ChordEngine } from './chords.js';
 import { updatePianoColors } from './piano.js';
 import { UNLOCK_LADDER } from './unlockLadder.js';
+import { CHARTS } from './charts.js';
 
 export function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
@@ -287,11 +288,15 @@ export const UI = {
   renderHSPanel() {
     const hsList = document.getElementById('hs-list');
     if (state.mode === 'survival') {
-      // One row per variant (no difficulty suffix — survival has no levels)
       hsList.innerHTML = ['std', 'nm'].map(v => {
         const label = v === 'nm' ? 'Nightmare' : 'Standard';
         const hs = localStorage.getItem(`chordSprint_survival_${v}_hs`);
         return `<div class="hs-row"><span>${label}</span><span class="hs-val">${hs ? hs + ' chords' : '—'}</span></div>`;
+      }).join('');
+    } else if (state.mode === 'falling') {
+      hsList.innerHTML = CHARTS.map(chart => {
+        const hs = localStorage.getItem('falling_hs_' + chart.id);
+        return `<div class="hs-row"><span>${chart.title}</span><span class="hs-val">${hs ? parseInt(hs).toLocaleString() : '—'}</span></div>`;
       }).join('');
     } else {
       hsList.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) => {
@@ -312,13 +317,99 @@ export const UI = {
     }).join('');
   },
 
+  // ── Falling Chords ────────────────────────────────────────────────────────
+
+  renderSongSelect() {
+    const grid = document.getElementById('song-grid');
+    const STARS = ['', '★', '★★', '★★★', '★★★★'];
+    grid.innerHTML = CHARTS.map(chart => {
+      const hs = localStorage.getItem('falling_hs_' + chart.id);
+      return `<button class="song-card" data-chart="${chart.id}">
+        <div class="song-card-top">
+          <span class="song-title">${chart.title}</span>
+          <span class="song-stars">${STARS[chart.difficulty] || ''}</span>
+        </div>
+        <div class="song-sub">${chart.subtitle}</div>
+        <div class="song-meta">
+          <span class="song-bpm">${chart.bpm} BPM</span>
+          <span class="song-chords">${chart.events.length} chords</span>
+          ${hs ? `<span class="song-hs">Best: ${parseInt(hs).toLocaleString()}</span>` : ''}
+        </div>
+      </button>`;
+    }).join('');
+  },
+
+  renderFallingHUD() {
+    const f     = state.falling;
+    const total = f.perfects + f.goods + f.oks + f.misses;
+    const acc   = total > 0 ? Math.round(((f.perfects + f.goods + f.oks) / total) * 100) : 0;
+
+    document.getElementById('hud-score').textContent  = state.score.toLocaleString();
+    document.getElementById('hud-timer').textContent  = state.streak;
+    document.getElementById('hud-streak').textContent = f.perfects;
+    document.getElementById('hud-mult').textContent   =
+      '×' + (state.multiplier % 1 === 0 ? state.multiplier : state.multiplier.toFixed(1));
+    document.getElementById('hud-chords').textContent = total > 0 ? acc + '%' : '—';
+  },
+
+  renderFallingResults(chart) {
+    const f      = state.falling;
+    const total  = f.results.length;
+    const hits   = f.perfects + f.goods + f.oks;
+    const acc    = total > 0 ? Math.round((hits / total) * 100) : 0;
+
+    document.getElementById('results-headline').textContent  = `${chart.title} — Complete!`;
+    document.getElementById('results-subheader').style.display = 'block';
+    document.getElementById('results-subheader').innerHTML  =
+      `<span class="mode-tag">Falling Chords</span>` +
+      `<div class="tier-reached" style="color:var(--cyan)">${chart.bpm} BPM · ${chart.events.length} chords</div>`;
+
+    // High score per chart
+    const hsKey  = 'falling_hs_' + chart.id;
+    const prevHS = parseInt(localStorage.getItem(hsKey) || '0', 10);
+    const newHS  = state.score > prevHS;
+    if (newHS) localStorage.setItem(hsKey, state.score);
+    document.getElementById('new-hs-badge').style.display = newHS ? 'inline-block' : 'none';
+
+    document.getElementById('weak-spot').style.display = 'none';
+
+    // Stats grid
+    document.getElementById('stats-grid').innerHTML = [
+      ['Score',      state.score.toLocaleString()],
+      ['Accuracy',   acc + '%'],
+      ['Perfects',   f.perfects],
+      ['Goods',      f.goods],
+      ['OKs / Miss', f.oks + ' / ' + f.misses],
+      ['Best Combo', f.maxCombo],
+    ].map(([l, v]) =>
+      `<div class="stat-card"><div class="sc-label">${l}</div><div class="sc-val">${v}</div></div>`
+    ).join('');
+
+    // Per-chord table
+    document.querySelector('.per-chord-table thead tr').innerHTML =
+      '<th>Chord</th><th>Rating</th><th>Points</th>';
+    document.getElementById('per-chord-tbody').innerHTML = f.results.map(r => {
+      const cls  = r.result === 'miss' ? 'falling-miss' : 'falling-' + r.result;
+      const label = r.result === 'perfect' ? '✦ Perfect'
+                  : r.result === 'good'    ? '◆ Good'
+                  : r.result === 'ok'      ? '◇ OK'
+                  :                          '✗ Miss';
+      return `<tr>
+        <td><strong>${r.symbol}</strong></td>
+        <td><span class="${cls}">${label}</span></td>
+        <td>${r.points > 0 ? '+' + r.points : '—'}</td>
+      </tr>`;
+    }).join('');
+  },
+
   renderMenu() {
     const isSurvival = state.mode === 'survival';
+    const isFalling  = state.mode === 'falling';
 
-    // Difficulty grid: shown for Sprint, hidden for Survival
+    // Difficulty grid: Sprint only
     const grid = document.getElementById('difficulty-grid');
-    grid.style.display = isSurvival ? 'none' : '';
-    if (!isSurvival) {
+    grid.style.display = (isSurvival || isFalling) ? 'none' : '';
+    if (!isSurvival && !isFalling) {
       grid.innerHTML = ChordEngine.DIFFICULTY_POOLS.map((d, i) =>
         `<button class="diff-btn${state.difficulty === i ? ' selected' : ''}" data-diff="${i}">
           <span class="diff-num">${i + 1}</span>
@@ -335,10 +426,14 @@ export const UI = {
       });
     }
 
-    // Progression preview: shown for Survival, hidden for Sprint
+    // Progression preview: Survival only
     const preview = document.getElementById('progression-preview');
     preview.style.display = isSurvival ? 'flex' : 'none';
     if (isSurvival) UI.renderProgressionPreview();
+
+    // Variant toggle: Survival only
+    document.getElementById('variant-selector').style.display =
+      isSurvival ? 'flex' : 'none';
 
     // Sync mode/variant button selected state
     document.querySelectorAll('.mode-btn').forEach(b => {
@@ -347,8 +442,10 @@ export const UI = {
     document.querySelectorAll('.variant-btn').forEach(b => {
       b.classList.toggle('selected', b.dataset.variant === state.selectedVariant);
     });
-    document.getElementById('variant-selector').style.display =
-      isSurvival ? 'flex' : 'none';
+
+    // Change START button label depending on mode
+    document.getElementById('btn-start').textContent =
+      isFalling ? '▶ SELECT SONG' : '▶ START';
 
     UI.renderHSPanel();
   },

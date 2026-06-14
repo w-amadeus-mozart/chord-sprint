@@ -10,6 +10,7 @@ import { UI, showScreen } from './ui.js';
 import { buildPiano, KEY_MAP } from './piano.js';
 import { SprintMode } from './modes/sprint.js';
 import { SurvivalMode, skipDeath } from './modes/survival.js';
+import { FallingChordsMode } from './modes/fallingChords.js';
 
 // ── MIDI status bar ──────────────────────────────────────
 function updateMidiStatus() {
@@ -51,6 +52,8 @@ MidiInput.on((type) => {
     if (state.screen === 'game') {
       if (state.mode === 'survival') {
         SurvivalMode.onNotesChanged();
+      } else if (state.mode === 'falling') {
+        FallingChordsMode.onNotesChanged();
       } else {
         SprintMode.onNotesChanged();
       }
@@ -132,7 +135,7 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
       b.classList.toggle('selected', b === btn));
     document.getElementById('variant-selector').style.display =
       state.mode === 'survival' ? 'flex' : 'none';
-    UI.renderHSPanel();
+    UI.renderMenu();
   });
 });
 
@@ -149,7 +152,17 @@ document.querySelectorAll('.variant-btn').forEach(btn => {
 // ── Button wiring ────────────────────────────────────────
 function startGame() {
   if (state.mode === 'survival') {
-    SurvivalMode.start(state.selectedVariant); // no difficulty — survival has its own progression
+    SurvivalMode.start(state.selectedVariant);
+  } else if (state.mode === 'falling') {
+    // Navigate to song select instead of starting directly
+    state.screen = 'song-select';
+    showScreen('song-select');
+    UI.renderSongSelect();
+    // Wire song card clicks (re-wired each visit so HS badges refresh)
+    document.getElementById('song-grid').addEventListener('click', e => {
+      const card = e.target.closest('[data-chart]');
+      if (card) FallingChordsMode.start(card.dataset.chart);
+    }, { once: true });
   } else {
     SprintMode.start(state.difficulty);
   }
@@ -157,8 +170,9 @@ function startGame() {
 
 function replayGame() {
   if (state.mode === 'survival') {
-    // Replay with the same variant as the just-finished run
     SurvivalMode.start(state.survival.variant);
+  } else if (state.mode === 'falling') {
+    FallingChordsMode.start(state.falling.chartId);
   } else {
     SprintMode.start(state.difficulty);
   }
@@ -167,10 +181,26 @@ function replayGame() {
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-play-again').addEventListener('click', replayGame);
 
-document.getElementById('btn-change-level').addEventListener('click', () => {
+document.getElementById('btn-back-from-songs').addEventListener('click', () => {
   state.screen = 'menu';
   showScreen('menu');
   UI.renderMenu();
+});
+
+document.getElementById('btn-change-level').addEventListener('click', () => {
+  if (state.mode === 'falling') {
+    state.screen = 'song-select';
+    showScreen('song-select');
+    UI.renderSongSelect();
+    document.getElementById('song-grid').addEventListener('click', e => {
+      const card = e.target.closest('[data-chart]');
+      if (card) FallingChordsMode.start(card.dataset.chart);
+    }, { once: true });
+  } else {
+    state.screen = 'menu';
+    showScreen('menu');
+    UI.renderMenu();
+  }
 });
 
 // ── Init ─────────────────────────────────────────────────

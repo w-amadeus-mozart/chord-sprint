@@ -4,9 +4,9 @@
 export const SPRINT_DURATION = 60; // seconds — change here for 30/90/120s variants
 
 export const state = {
-  screen: 'menu',         // 'menu' | 'game' | 'results' | 'dying'
+  screen: 'menu',         // 'menu' | 'song-select' | 'game' | 'results' | 'dying'
   difficulty: 0,          // 0–5
-  mode: 'sprint',         // 'sprint' | 'survival'
+  mode: 'sprint',         // 'sprint' | 'survival' | 'falling'
   selectedVariant: 'std', // 'std' | 'nm' — chosen on menu for survival
   // sprint/survival shared runtime
   score: 0,
@@ -24,6 +24,16 @@ export const state = {
   pausedAt: 0,
   // per-round history
   attempts: [],             // { symbol, responseMs, clean, points } (+ windowSec for survival)
+  // falling-chords runtime (reset at start of each song)
+  falling: {
+    chartId:  '',
+    results:  [],   // { symbol, result: 'perfect'|'good'|'ok'|'miss', points }
+    perfects: 0,
+    goods:    0,
+    oks:      0,
+    misses:   0,
+    maxCombo: 0,
+  },
   // survival-specific runtime
   survival: {
     variant: 'std',
